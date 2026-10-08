@@ -21,6 +21,7 @@
 
 #include <com/sun/star/sheet/ComplexReference.hpp>
 #include <com/sun/star/sheet/ExternalReference.hpp>
+#include <com/sun/star/sheet/NameToken.hpp>
 #include <com/sun/star/sheet/ReferenceFlags.hpp>
 #include <com/sun/star/sheet/SingleReference.hpp>
 #include <com/sun/star/table/CellAddress.hpp>
@@ -986,7 +987,13 @@ bool FormulaParserImpl::pushDefinedNameOperand( const DefinedNameRef& rxDefName 
     if( rxDefName->isMacroFunction() )
         return pushValueOperand( rxDefName->getModelName(), OPCODE_MACRO );
     if( rxDefName->getTokenIndex() >= 0 )
+    {
+        // A sheet-local name is only found together with its sheet: a bare
+        // index names a global one.
+        if( !rxDefName->isGlobalName() )
+            return pushValueOperand( NameToken( rxDefName->getTokenIndex(), rxDefName->getLocalCalcSheet() ), OPCODE_NAME );
         return pushValueOperand( rxDefName->getTokenIndex(), OPCODE_NAME );
+    }
     return pushEmbeddedRefOperand( *rxDefName, true );
 }
 

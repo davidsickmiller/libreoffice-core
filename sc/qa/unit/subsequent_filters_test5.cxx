@@ -437,6 +437,20 @@ CPPUNIT_TEST_FIXTURE(ScFiltersTest5, testXLSBAddInFunctionLeadingSpaces)
     ASSERT_DOUBLES_EQUAL(60.0, pDoc->GetValue(ScAddress(0, 9, 0)));
 }
 
+CPPUNIT_TEST_FIXTURE(ScFiltersTest5, testXLSBSheetLocalName)
+{
+    // name1 is defined twice: globally as $A$1 (2) and for Sheet1 as $A$6 (7).
+    // A4's token names the global one, A7's the sheet-local one.
+    createScDoc("xlsb/sheet-local-name.xlsb");
+    ScDocument* pDoc = getScDoc();
+    pDoc->CalcAll();
+
+    ASSERT_DOUBLES_EQUAL(2.0, pDoc->GetValue(ScAddress(0, 3, 0)));
+    // Without the fix the sheet-local name was looked up as a global one and
+    // A7 was #NAME?.
+    ASSERT_DOUBLES_EQUAL(7.0, pDoc->GetValue(ScAddress(0, 6, 0)));
+}
+
 CPPUNIT_TEST_FIXTURE(ScFiltersTest5, testGenericXMLMapped)
 {
     createScDoc("xml-mapped/list-of-records.xml");
