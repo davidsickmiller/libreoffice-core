@@ -1621,6 +1621,9 @@ void WorksheetHelper::putFormulaTokens( const ScAddress& rAddress, const ApiToke
     ScDocumentImport& rDoc = getDocImport();
     std::unique_ptr<ScTokenArray> pTokenArray(new ScTokenArray(rDoc.getDoc()));
     ScTokenConversion::ConvertToTokenArray(rDoc.getDoc(), *pTokenArray, rTokens);
+    // A BIFF12 spilled range arrives as _xlfn.ANCHORARRAY(<ref>), as OOXML
+    // spells it: make it the native <ref># the text import makes.
+    liftAnchorArrayToPostfix(*pTokenArray);
     rDoc.setFormulaCell(rAddress, std::move(pTokenArray));
 }
 

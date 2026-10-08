@@ -410,6 +410,20 @@ CPPUNIT_TEST_FIXTURE(ScFiltersTest5, testTdf94627)
     ASSERT_DOUBLES_EQUAL(2, fVal);
 }
 
+CPPUNIT_TEST_FIXTURE(ScFiltersTest5, testXLSBSpilledRangeReference)
+{
+    // B6:B8 is the dynamic array =A6:A8*2 and C6 is =SUM(B6#). An .xlsb stores
+    // B6# as EXTERN.CALL of the hidden future function _xlfn.ANCHORARRAY, with
+    // B6 as the call's only argument.
+    createScDoc("xlsb/spilled-range-reference.xlsb");
+    ScDocument* pDoc = getScDoc();
+    pDoc->CalcAll();
+
+    // Without the fix the argument was dropped and C6 was an error.
+    ASSERT_DOUBLES_EQUAL(12.0, pDoc->GetValue(ScAddress(2, 5, 0)));
+    CPPUNIT_ASSERT_EQUAL(u"=SUM($B$6#)"_ustr, pDoc->GetFormula(2, 5, 0));
+}
+
 CPPUNIT_TEST_FIXTURE(ScFiltersTest5, testGenericXMLMapped)
 {
     createScDoc("xml-mapped/list-of-records.xml");

@@ -116,6 +116,17 @@ const FunctionInfo* FormulaFinalizer::getExternCallInfo( ApiToken& orFuncToken, 
         return pFuncInfo;
     }
 
+    // A spilled range: BIFF12 stores <ref># as EXTERN.CALL of the future
+    // function _xlfn.ANCHORARRAY, as OOXML spells it. Give it the opcode the
+    // OOXML import gives it, so the formula buffer can make it native <ref>#.
+    if( ((rECToken.OpCode == OPCODE_MACRO) || (rECToken.OpCode == OPCODE_BAD)) && rECToken.Data.has< OUString >() &&
+            rECToken.Data.get< OUString >().equalsIgnoreAsciiCase( u"_xlfn.ANCHORARRAY" ) )
+    {
+        orFuncToken.OpCode = ocAnchorArray;
+        orFuncToken.Data.clear();
+        return nullptr;
+    }
+
     // macro call or unknown function name, move data to function token
     if( (rECToken.OpCode == OPCODE_MACRO) || (rECToken.OpCode == OPCODE_BAD) )
         orFuncToken = rECToken;
@@ -203,6 +214,13 @@ const ApiToken* FormulaFinalizer::processParameters(
 
             // process all parameters
             FunctionParamInfoIterator aParamInfoIt( *pRealFuncInfo );
+            /*  Still the EXTERN.CALL info after its hidden first parameter was
+                moved into the function token: that parameter's info, which
+                marks it Excel-only, does not describe the first real argument,
+                so step past it. Otherwise a macro call or a future function
+                Calc has no entry for loses its first argument. */
+            if( (pRealFuncInfo->mnBiffFuncId == BIFF_FUNC_EXTERNCALL) && (aPosIt != aParams.begin()) )
+                ++aParamInfoIt;
             size_t nLastValidSize = maTokens.size();
             size_t nLastValidCount = 0;
             for( size_t nParam = 0; nParam < nParamCount; ++nParam, ++aPosIt, ++aParamInfoIt )
