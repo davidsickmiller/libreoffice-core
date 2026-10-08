@@ -869,12 +869,14 @@ bool FormulaParserImpl::pushFunctionOperatorToken( const FunctionInfo& rFuncInfo
     bool bOk = pushFunctionOperatorToken( rFuncInfo.mnApiOpCode, nParamCount, pLeadingSpaces, pClosingSpaces );
     if( bOk )
     {
+        // The function token follows the leading spaces inserted in front of it.
+        size_t nFuncToken = pLeadingSpaces ? pLeadingSpaces->size() : 0;
        // create an external add-in call for the passed built-in function
         if( (rFuncInfo.mnApiOpCode == OPCODE_EXTERNAL) && !rFuncInfo.maExtProgName.isEmpty() )
-            getOperandToken( 0, 0 ).Data <<= rFuncInfo.maExtProgName;
+            getOperandToken( 0, nFuncToken ).Data <<= rFuncInfo.maExtProgName;
         // create a bad token with unsupported function name
         else if( (rFuncInfo.mnApiOpCode == OPCODE_BAD) && !rFuncInfo.maOoxFuncName.isEmpty() )
-            getOperandToken( 0, 0 ).Data <<= rFuncInfo.maOoxFuncName;
+            getOperandToken( 0, nFuncToken ).Data <<= rFuncInfo.maOoxFuncName;
     }
     return bOk;
 }

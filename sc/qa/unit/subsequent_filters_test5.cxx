@@ -424,6 +424,19 @@ CPPUNIT_TEST_FIXTURE(ScFiltersTest5, testXLSBSpilledRangeReference)
     CPPUNIT_ASSERT_EQUAL(u"=SUM($B$6#)"_ustr, pDoc->GetFormula(2, 5, 0));
 }
 
+CPPUNIT_TEST_FIXTURE(ScFiltersTest5, testXLSBAddInFunctionLeadingSpaces)
+{
+    // A10 is =EOMONTH($A$1,1), with Excel's whitespace token (PtgAttrSpace)
+    // in front of the call. EOMONTH is an add-in function, whose programmatic
+    // name has to land on the function token, not on the whitespace before it.
+    createScDoc("xlsb/addin-function-leading-spaces.xlsb");
+    ScDocument* pDoc = getScDoc();
+    pDoc->CalcAll();
+
+    // Without the fix the whole formula failed to import and A10 was #REF!.
+    ASSERT_DOUBLES_EQUAL(60.0, pDoc->GetValue(ScAddress(0, 9, 0)));
+}
+
 CPPUNIT_TEST_FIXTURE(ScFiltersTest5, testGenericXMLMapped)
 {
     createScDoc("xml-mapped/list-of-records.xml");
