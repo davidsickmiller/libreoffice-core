@@ -5186,7 +5186,7 @@ CPPUNIT_TEST_FIXTURE(TestFormula, testFuncOFFSETNegativeSize)
 
     auto getErr = [this](SCROW nRow)
     {
-        const ScFormulaCell* pFC = m_pDoc->GetFormulaCell(ScAddress(6, nRow, 0));
+        ScFormulaCell* pFC = m_pDoc->GetFormulaCell(ScAddress(6, nRow, 0));
         CPPUNIT_ASSERT(pFC);
         return static_cast<int>(pFC->GetErrCode());
     };
