@@ -92,7 +92,8 @@ ScCalcConfig::ScCalcConfig() :
     meStringRefAddressSyntax(formula::FormulaGrammar::CONV_UNSPECIFIED),
     meStringConversion(StringConversion::LOCALE),     // old LibreOffice behavior
     mbEmptyStringAsZero(false),
-    mbHasStringRefSyntax(false)
+    mbHasStringRefSyntax(false),
+    mbOffsetExcelCompat(false)
 {
     setOpenCLConfigToDefault();
 }
@@ -158,6 +159,8 @@ void ScCalcConfig::MergeDocumentSpecific( const ScCalcConfig& r )
     // INDIRECT ref syntax is per document.
     meStringRefAddressSyntax = r.meStringRefAddressSyntax;
     mbHasStringRefSyntax      = r.mbHasStringRefSyntax;
+    // OFFSET() Excel compatibility is per document.
+    mbOffsetExcelCompat      = r.mbOffsetExcelCompat;
 }
 
 void ScCalcConfig::SetStringRefSyntax( formula::FormulaGrammar::AddressConvention eConv )
@@ -172,6 +175,7 @@ bool ScCalcConfig::operator== (const ScCalcConfig& r) const
            meStringConversion == r.meStringConversion &&
            mbEmptyStringAsZero == r.mbEmptyStringAsZero &&
            mbHasStringRefSyntax == r.mbHasStringRefSyntax &&
+           mbOffsetExcelCompat == r.mbOffsetExcelCompat &&
            mbOpenCLSubsetOnly == r.mbOpenCLSubsetOnly &&
            mbOpenCLAutoSelect == r.mbOpenCLAutoSelect &&
            maOpenCLDevice == r.maOpenCLDevice &&

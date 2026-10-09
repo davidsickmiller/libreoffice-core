@@ -54,6 +54,10 @@ struct SC_DLLPUBLIC ScCalcConfig
     StringConversion meStringConversion;
     bool mbEmptyStringAsZero : 1;
     bool mbHasStringRefSyntax : 1;
+    /// OFFSET() as in Excel: negative NewHeight/NewWidth extend up/left from
+    /// the shifted cell, and a result outside the sheet is #REF!.
+    /// Per document, set when importing Excel formats.
+    bool mbOffsetExcelCompat : 1;
 
     static bool isOpenCLEnabled();
     static bool isThreadingEnabled();

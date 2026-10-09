@@ -28,6 +28,7 @@
 #include <docmodel/color/ComplexColor.hxx>
 #include <docmodel/theme/ThemeColorType.hxx>
 #include <dbdata.hxx>
+#include <calcconfig.hxx>
 #include <dbdocfun.hxx>
 #include <formulacell.hxx>
 #include <inputopt.hxx>
@@ -1763,6 +1764,29 @@ CPPUNIT_TEST_FIXTURE(ScFiltersTest4, testCellTextRotation)
     CPPUNIT_ASSERT_EQUAL_MESSAGE("radians", nExpectedAngle.get(), nActualAngle.get());
     nActualAngle = pDoc->GetAttr(3, 0, 0, ATTR_ROTATE_VALUE).GetValue();
     CPPUNIT_ASSERT_EQUAL_MESSAGE("grad", nExpectedAngle.get(), nActualAngle.get());
+}
+
+CPPUNIT_TEST_FIXTURE(ScFiltersTest4, testOffsetNegativeSizeXLSX)
+{
+    // Excel computes OFFSET() with a negative height or width as a range that
+    // extends up or left from the shifted cell, which is included.
+    createScDoc("xlsx/offset-negative-size.xlsx");
+    ScDocument* pDoc = getScDoc();
+    CPPUNIT_ASSERT(pDoc->GetCalcConfig().mbOffsetExcelCompat);
+    pDoc->CalcAll();
+
+    // Without the fix, these were Err:502.
+    CPPUNIT_ASSERT_EQUAL(9.0, pDoc->GetValue(ScAddress(6, 0, 0))); // SUM(OFFSET(E1,,,,-E2))
+    CPPUNIT_ASSERT_EQUAL(9.0, pDoc->GetValue(ScAddress(6, 1, 0))); // SUM(OFFSET(E1,0,0,1,-2))
+    CPPUNIT_ASSERT_EQUAL(10.0, pDoc->GetValue(ScAddress(6, 2, 0))); // SUM(OFFSET(A10,,,-2))
+    CPPUNIT_ASSERT_EQUAL(9.0, pDoc->GetValue(ScAddress(6, 3, 0))); // SUM(OFFSET(D1,,,,E2))
+
+    // Sum of the last n periods: IF(n=0,0,SUM(OFFSET(amount,,,,-n)))
+    const double aSums[] = { 0, 20, 50, 90, 120, 110 };
+    for (SCCOL nCol = 0; nCol < SCCOL(std::size(aSums)); ++nCol)
+        CPPUNIT_ASSERT_EQUAL(aSums[nCol], pDoc->GetValue(ScAddress(nCol, 6, 0)));
+    // n reaches before column A.
+    CPPUNIT_ASSERT_EQUAL(u"#REF!"_ustr, pDoc->GetString(ScAddress(6, 6, 0)));
 }
 
 CPPUNIT_PLUGIN_IMPLEMENT();

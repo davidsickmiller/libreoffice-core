@@ -12411,6 +12411,31 @@ void ScInterpreter::ScAddressFunc()
         PushString( aRefStr );
 }
 
+namespace {
+
+/** Set start and end of an OFFSET() result dimension from the shifted start
+    and the size. A negative size (Excel interop) extends back from the start,
+    which is included. A result not representable in T is set to -1, invalid. */
+template<typename T>
+void lcl_SetOffsetSize( T& rStart, T& rEnd, sal_Int32 nSize )
+{
+    tools::Long nStart = rStart;
+    tools::Long nEnd = nStart + nSize - 1;
+    if (nSize < 0)
+    {
+        nEnd = nStart;
+        nStart = nStart + nSize + 1;
+    }
+    auto lcl_Narrow = [](tools::Long n)
+    {
+        return (n < 0 || n > std::numeric_limits<T>::max()) ? T(-1) : static_cast<T>(n);
+    };
+    rStart = lcl_Narrow(nStart);
+    rEnd = lcl_Narrow(nEnd);
+}
+
+}
+
 void ScInterpreter::ScOffset()
 {
     sal_uInt8 nParamCount = GetByte();
@@ -12447,11 +12472,22 @@ void ScInterpreter::ScOffset()
         PushError( nGlobalError);
         return;
     }
-    if (nColNew <= 0 || nRowNew <= 0)
+    // Excel interop: a negative NewHeight or NewWidth extends the range up or
+    // left from the shifted cell, which is included. ODFF requires >0.
+    const bool bExcel = maCalcConfig.mbOffsetExcelCompat;
+    if (nColNew == 0 || nRowNew == 0 || (!bExcel && (nColNew < 0 || nRowNew < 0)))
     {
         PushIllegalArgument();
         return;
     }
+    // Excel returns #REF! for a result outside the sheet.
+    auto pushOutOfSheet = [this, bExcel]()
+    {
+        if (bExcel)
+            PushError( FormulaError::NoRef);
+        else
+            PushIllegalArgument();
+    };
     SCCOL nCol1(0);
     SCROW nRow1(0);
     SCTAB nTab1(0);
@@ -12468,7 +12504,7 @@ void ScInterpreter::ScOffset()
             nCol1 = static_cast<SCCOL>(static_cast<tools::Long>(nCol1) + nColPlus);
             nRow1 = static_cast<SCROW>(static_cast<tools::Long>(nRow1) + nRowPlus);
             if (!mrDoc.ValidCol(nCol1) || !mrDoc.ValidRow(nRow1))
-                PushIllegalArgument();
+                pushOutOfSheet();
             else
                 PushSingleRef(nCol1, nRow1, nTab1);
         }
@@ -12476,11 +12512,11 @@ void ScInterpreter::ScOffset()
         {
             nCol1 = static_cast<SCCOL>(static_cast<tools::Long>(nCol1)+nColPlus);
             nRow1 = static_cast<SCROW>(static_cast<tools::Long>(nRow1)+nRowPlus);
-            nCol2 = static_cast<SCCOL>(static_cast<tools::Long>(nCol1)+nColNew-1);
-            nRow2 = static_cast<SCROW>(static_cast<tools::Long>(nRow1)+nRowNew-1);
+            lcl_SetOffsetSize(nCol1, nCol2, nColNew);
+            lcl_SetOffsetSize(nRow1, nRow2, nRowNew);
             if (!mrDoc.ValidCol(nCol1) || !mrDoc.ValidRow(nRow1) ||
                 !mrDoc.ValidCol(nCol2) || !mrDoc.ValidRow(nRow2))
-                PushIllegalArgument();
+                pushOutOfSheet();
             else
                 PushDoubleRef(nCol1, nRow1, nTab1, nCol2, nRow2, nTab1);
         }
@@ -12502,7 +12538,7 @@ void ScInterpreter::ScOffset()
             nCol1 = static_cast<SCCOL>(static_cast<tools::Long>(nCol1) + nColPlus);
             nRow1 = static_cast<SCROW>(static_cast<tools::Long>(nRow1) + nRowPlus);
             if (!mrDoc.ValidCol(nCol1) || !mrDoc.ValidRow(nRow1))
-                PushIllegalArgument();
+                pushOutOfSheet();
             else
                 PushExternalSingleRef(nFileId, aTabName, nCol1, nRow1, nTab1);
         }
@@ -12510,12 +12546,12 @@ void ScInterpreter::ScOffset()
         {
             nCol1 = static_cast<SCCOL>(static_cast<tools::Long>(nCol1)+nColPlus);
             nRow1 = static_cast<SCROW>(static_cast<tools::Long>(nRow1)+nRowPlus);
-            nCol2 = static_cast<SCCOL>(static_cast<tools::Long>(nCol1)+nColNew-1);
-            nRow2 = static_cast<SCROW>(static_cast<tools::Long>(nRow1)+nRowNew-1);
+            lcl_SetOffsetSize(nCol1, nCol2, nColNew);
+            lcl_SetOffsetSize(nRow1, nRow2, nRowNew);
             nTab2 = nTab1;
             if (!mrDoc.ValidCol(nCol1) || !mrDoc.ValidRow(nRow1) ||
                 !mrDoc.ValidCol(nCol2) || !mrDoc.ValidRow(nRow2))
-                PushIllegalArgument();
+                pushOutOfSheet();
             else
                 PushExternalDoubleRef(nFileId, aTabName, nCol1, nRow1, nTab1, nCol2, nRow2, nTab2);
         }
@@ -12530,11 +12566,13 @@ void ScInterpreter::ScOffset()
             nRowNew = nRow2 - nRow1 + 1;
         nCol1 = static_cast<SCCOL>(static_cast<tools::Long>(nCol1)+nColPlus);
         nRow1 = static_cast<SCROW>(static_cast<tools::Long>(nRow1)+nRowPlus);
-        nCol2 = static_cast<SCCOL>(static_cast<tools::Long>(nCol1)+nColNew-1);
-        nRow2 = static_cast<SCROW>(static_cast<tools::Long>(nRow1)+nRowNew-1);
-        if (!mrDoc.ValidCol(nCol1) || !mrDoc.ValidRow(nRow1) ||
-            !mrDoc.ValidCol(nCol2) || !mrDoc.ValidRow(nRow2) || nTab1 != nTab2)
+        lcl_SetOffsetSize(nCol1, nCol2, nColNew);
+        lcl_SetOffsetSize(nRow1, nRow2, nRowNew);
+        if (nTab1 != nTab2)
             PushIllegalArgument();
+        else if (!mrDoc.ValidCol(nCol1) || !mrDoc.ValidRow(nRow1) ||
+                 !mrDoc.ValidCol(nCol2) || !mrDoc.ValidRow(nRow2))
+            pushOutOfSheet();
         else
             PushDoubleRef(nCol1, nRow1, nTab1, nCol2, nRow2, nTab1);
         break;
@@ -12558,11 +12596,13 @@ void ScInterpreter::ScOffset()
             nRowNew = nRow2 - nRow1 + 1;
         nCol1 = static_cast<SCCOL>(static_cast<tools::Long>(nCol1)+nColPlus);
         nRow1 = static_cast<SCROW>(static_cast<tools::Long>(nRow1)+nRowPlus);
-        nCol2 = static_cast<SCCOL>(static_cast<tools::Long>(nCol1)+nColNew-1);
-        nRow2 = static_cast<SCROW>(static_cast<tools::Long>(nRow1)+nRowNew-1);
-        if (!mrDoc.ValidCol(nCol1) || !mrDoc.ValidRow(nRow1) ||
-            !mrDoc.ValidCol(nCol2) || !mrDoc.ValidRow(nRow2) || nTab1 != nTab2)
+        lcl_SetOffsetSize(nCol1, nCol2, nColNew);
+        lcl_SetOffsetSize(nRow1, nRow2, nRowNew);
+        if (nTab1 != nTab2)
             PushIllegalArgument();
+        else if (!mrDoc.ValidCol(nCol1) || !mrDoc.ValidRow(nRow1) ||
+                 !mrDoc.ValidCol(nCol2) || !mrDoc.ValidRow(nRow2))
+            pushOutOfSheet();
         else
             PushExternalDoubleRef(nFileId, aTabName, nCol1, nRow1, nTab1, nCol2, nRow2, nTab2);
         break;

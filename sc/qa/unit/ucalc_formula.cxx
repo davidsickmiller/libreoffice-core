@@ -21,6 +21,7 @@
 #include <docpool.hxx>
 #include <scmod.hxx>
 #include <undomanager.hxx>
+#include <calcconfig.hxx>
 
 #include <formula/vectortoken.hxx>
 #include <svl/intitem.hxx>
@@ -5149,6 +5150,72 @@ CPPUNIT_TEST_FIXTURE(TestFormula, testInsertRowColLabel)
     result = m_pDoc->GetValue(0, 0, 0);
 
     ASSERT_DOUBLES_EQUAL(4.0, result);
+
+    m_pDoc->DeleteTab(0);
+}
+
+CPPUNIT_TEST_FIXTURE(TestFormula, testFuncOFFSETNegativeSize)
+{
+    m_pDoc->InsertTab(0, u"Test"_ustr);
+
+    sc::AutoCalcSwitch aACSwitch(*m_pDoc, true); // turn auto calc on.
+
+    // A1:E1 = 1,2,3,4,5; E2 = 2; A9 = 7; A10 = 3
+    for (SCCOL nCol = 0; nCol < 5; ++nCol)
+        m_pDoc->SetValue(ScAddress(nCol, 0, 0), nCol + 1);
+    m_pDoc->SetValue(ScAddress(4, 1, 0), 2);
+    m_pDoc->SetValue(ScAddress(0, 8, 0), 7);
+    m_pDoc->SetValue(ScAddress(0, 9, 0), 3);
+
+    static const OUString aFormulas[] = {
+        u"=SUM(OFFSET(E1;;;;-E2))"_ustr, // G1: D1:E1
+        u"=SUM(OFFSET(E1;0;0;1;-2))"_ustr, // G2: D1:E1
+        u"=SUM(OFFSET(A10;;;-2))"_ustr, // G3: A9:A10
+        u"=SUM(OFFSET(D1;;;;E2))"_ustr, // G4: D1:E1, positive width
+        u"=SUM(OFFSET(B10;0;0;-2;-2))"_ustr, // G5: A9:B10
+        u"=SUM(OFFSET(A1;0;4;1;-3))"_ustr, // G6: C1:E1, edge is the shifted cell
+        u"=SUM(OFFSET(D1:E2;0;0;;-2))"_ustr, // G7: C1:D2, height from the range
+        u"=SUM(OFFSET(A1;0;0;1;-2))"_ustr, // G8: leaves the sheet
+        u"=SUM(OFFSET(A1;0;0;-2))"_ustr, // G9: leaves the sheet
+        u"=SUM(OFFSET(A1;-1;0))"_ustr, // G10: leaves the sheet, positive size
+        u"=SUM(OFFSET(E1;0;0;1;0))"_ustr, // G11: zero width
+        u"=SUM(OFFSET(E1;0;0;1;-70000))"_ustr, // G12: must not wrap into the sheet
+    };
+    for (size_t i = 0; i < std::size(aFormulas); ++i)
+        m_pDoc->SetString(ScAddress(6, i, 0), aFormulas[i]);
+
+    auto getErr = [this](SCROW nRow)
+    {
+        ScFormulaCell* pFC = m_pDoc->GetFormulaCell(ScAddress(6, nRow, 0));
+        CPPUNIT_ASSERT(pFC);
+        return static_cast<int>(pFC->GetErrCode());
+    };
+
+    // ODFF: NewHeight and NewWidth must be >0, and only a positive size works.
+    m_pDoc->CalcAll();
+    for (SCROW nRow : { 0, 1, 2, 4, 5, 6, 7, 8, 9, 10, 11 })
+        CPPUNIT_ASSERT_EQUAL_MESSAGE(OString("ODFF row " + OString::number(nRow + 1)).getStr(),
+                                     int(FormulaError::IllegalArgument), getErr(nRow));
+    CPPUNIT_ASSERT_EQUAL(9.0, m_pDoc->GetValue(ScAddress(6, 3, 0)));
+
+    // Excel: a negative size extends up or left from the shifted cell, which
+    // is included, and a result outside the sheet is #REF!.
+    ScCalcConfig aConfig = m_pDoc->GetCalcConfig();
+    aConfig.mbOffsetExcelCompat = true;
+    m_pDoc->SetCalcConfig(aConfig);
+    m_pDoc->CalcAll();
+    CPPUNIT_ASSERT_EQUAL(9.0, m_pDoc->GetValue(ScAddress(6, 0, 0)));
+    CPPUNIT_ASSERT_EQUAL(9.0, m_pDoc->GetValue(ScAddress(6, 1, 0)));
+    CPPUNIT_ASSERT_EQUAL(10.0, m_pDoc->GetValue(ScAddress(6, 2, 0)));
+    CPPUNIT_ASSERT_EQUAL(9.0, m_pDoc->GetValue(ScAddress(6, 3, 0)));
+    CPPUNIT_ASSERT_EQUAL(10.0, m_pDoc->GetValue(ScAddress(6, 4, 0)));
+    CPPUNIT_ASSERT_EQUAL(12.0, m_pDoc->GetValue(ScAddress(6, 5, 0)));
+    CPPUNIT_ASSERT_EQUAL(7.0, m_pDoc->GetValue(ScAddress(6, 6, 0)));
+    CPPUNIT_ASSERT_EQUAL(int(FormulaError::NoRef), getErr(7));
+    CPPUNIT_ASSERT_EQUAL(int(FormulaError::NoRef), getErr(8));
+    CPPUNIT_ASSERT_EQUAL(int(FormulaError::NoRef), getErr(9));
+    CPPUNIT_ASSERT_EQUAL(int(FormulaError::IllegalArgument), getErr(10));
+    CPPUNIT_ASSERT_EQUAL(int(FormulaError::NoRef), getErr(11));
 
     m_pDoc->DeleteTab(0);
 }
