@@ -123,6 +123,11 @@ ImportExcel::ImportExcel( XclImpRootData& rImpData, SvStream& rStrm ):
     rD.SetDocOptions( aOpt );
     rD.GetFormatTable()->ChangeNullDate( 30, 12, 1899 );
 
+    // OFFSET() with negative height/width as Excel computes it.
+    ScCalcConfig aCalcConfig = rD.GetCalcConfig();
+    aCalcConfig.mbOffsetExcelCompat = true;
+    rD.SetCalcConfig( aCalcConfig );
+
     ScDocOptions aDocOpt( rD.GetDocOptions() );
     aDocOpt.SetIgnoreCase( true );              // always in Excel
     aDocOpt.SetFormulaRegexEnabled( false );    // regular expressions? what's that?

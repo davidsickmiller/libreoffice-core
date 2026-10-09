@@ -557,6 +557,13 @@ void WorkbookGlobals::initialize()
     Reference< XDocumentProperties > xDocProps = mxDoc->getDocumentProperties();
     const OUString aGenerator( xDocProps->getGenerator());
 
+    {
+        // OFFSET() with negative height/width as Excel computes it.
+        ScCalcConfig aCalcConfig = mpDoc->GetCalcConfig();
+        aCalcConfig.mbOffsetExcelCompat = true;
+        mpDoc->SetCalcConfig(aCalcConfig);
+    }
+
     if (aGenerator.startsWithIgnoreAsciiCase("Microsoft"))
     {
         mbGeneratorKnownGood = true;
